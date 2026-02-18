@@ -45,10 +45,10 @@ jobs:
       - name: Typecheck workers
         run: pnpm run workers:typecheck
 
-      - name: Apply D1 migrations (remote)
-        run: |
-          pnpm -C workers/api exec wrangler d1 execute zju-charger --remote --file ../d1/migrations/0001_init.sql
-          pnpm -C workers/api exec wrangler d1 execute zju-charger --remote --file ../d1/migrations/0002_indexes.sql
+      # - name: Apply D1 migrations (remote)
+      #   run: |
+      #     pnpm -C workers/api exec wrangler d1 execute zju-charger --remote --file ../d1/migrations/0001_init.sql
+      #     pnpm -C workers/api exec wrangler d1 execute zju-charger --remote --file ../d1/migrations/0002_indexes.sql
 
       - name: Deploy API worker
         run: pnpm run api:deploy
