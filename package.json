@@ -10,7 +10,7 @@
     "docs:preview": "vitepress preview docs --base /",
     "lint": "eslint \"workers/**/*.ts\"",
     "lint:fix": "pnpm run lint -- --fix",
-    "prepare": "husky",
+    "precommit:install": "pre-commit install --install-hooks",
     "api:dev": "pnpm --dir workers/api dev",
     "api:deploy": "pnpm --dir workers/api deploy",
     "api:typecheck": "pnpm --dir workers/api typecheck",
@@ -23,7 +23,6 @@
     "@eslint/js": "^9.39.1",
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
-    "husky": "^9.1.7",
     "typescript-eslint": "^8.46.2",
     "vitepress": "^1.0.0"
   }
