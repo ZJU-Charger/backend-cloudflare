@@ -16,6 +16,20 @@
 pnpm install
 ```
 
+## 1.1 GitHub Actions 自动部署
+
+仓库内置 `.github/workflows/workers-deploy.yml`，推送 `main` 后自动执行：
+
+1. `workers:typecheck`
+2. 远程执行 D1 migrations
+3. 部署 API Worker
+4. 部署 Fetcher Worker
+
+只需在 GitHub 仓库设置以下 Secrets：
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
 ## 2. 创建 D1 数据库
 
 ```bash

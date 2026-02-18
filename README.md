@@ -50,6 +50,19 @@ pnpm run fetcher:deploy
 pnpm run api:deploy
 ```
 
+## 自动部署（推荐）
+
+仓库已配置 GitHub Actions：`.github/workflows/workers-deploy.yml`。
+
+- 触发条件：推送到 `main` 且改动 `workers/**`（或相关 lock/workflow 文件）
+- 流程：Typecheck → 执行 D1 migrations → 部署 API Worker → 部署 Fetcher Worker
+- 你只需 `git push`，无需本地手动 deploy
+
+首次需要在 GitHub 仓库设置 Secrets：
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
 ## 文档
 
 - [快速开始](./docs/01-quick-start.md)
