@@ -3,6 +3,7 @@ import { isNightPauseWindow, parseDeviceIds } from "../../shared/src";
 interface Env {
   DB: D1Database;
   HISTORY_ENABLED?: string;
+  FETCH_CONCURRENCY?: string;
   NEPTUNE_JUNIOR_OPENID?: string;
   NEPTUNE_JUNIOR_UNIONID?: string;
   DLMM_TOKEN?: string;
@@ -45,12 +46,15 @@ interface StationSnapshot {
 
 interface NeptuneJuniorRunContext {
   token: string | null;
+  tokenPromise: Promise<string | null> | null;
   attempted: boolean;
 }
 
 const FETCH_TIMEOUT_MS = 8_000;
 const CRON_INTERVAL_MS = 2 * 60 * 1000;
 const SNAPSHOT_UPSERT_CHUNK_SIZE = 16;
+const DEFAULT_FETCH_CONCURRENCY = 4;
+const MAX_FETCH_CONCURRENCY = 6;
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -89,30 +93,15 @@ async function runScheduledFetch(env: Env): Promise<void> {
 
   const snapshotTime = Date.now();
   const stationsForRun = rotateStationsForCycle(stations, snapshotTime);
-  const snapshots: StationSnapshot[] = [];
-  const neptuneJuniorContext: NeptuneJuniorRunContext = { token: null, attempted: false };
-  let stoppedBySubrequestLimit = false;
-
-  for (const station of stationsForRun) {
-    try {
-      const usage = await fetchStationUsage(station, env, neptuneJuniorContext);
-      snapshots.push({
-        hashId: station.hashId,
-        snapshotTime,
-        free: usage.free,
-        used: usage.used,
-        total: usage.total,
-        error: usage.error,
-      });
-    } catch (error) {
-      if (isTooManySubrequestsError(error)) {
-        stoppedBySubrequestLimit = true;
-        console.warn("Subrequest limit reached; persisting partial successful snapshots only.");
-        break;
-      }
-      console.error(`Station fetch failed for ${station.provider}/${station.name}`, error);
-    }
-  }
+  const neptuneJuniorContext: NeptuneJuniorRunContext = { token: null, tokenPromise: null, attempted: false };
+  const fetchConcurrency = resolveFetchConcurrency(env.FETCH_CONCURRENCY);
+  const { snapshots, stoppedBySubrequestLimit } = await fetchStationsWithConcurrency(
+    stationsForRun,
+    env,
+    neptuneJuniorContext,
+    snapshotTime,
+    fetchConcurrency,
+  );
 
   if (snapshots.length === 0) {
     console.warn("No successful snapshots collected in this cycle; skip database write.");
@@ -131,6 +120,7 @@ async function runScheduledFetch(env: Env): Promise<void> {
       event: "fetch_cycle_complete",
       stationCount: stations.length,
       fetchedStationCount: snapshots.length,
+      fetchConcurrency,
       durationMs: Date.now() - startedAt,
       historyEnabled: isHistoryEnabled(env.HISTORY_ENABLED),
       stoppedBySubrequestLimit,
@@ -188,6 +178,61 @@ async function fetchStationUsage(
     default:
       return fetchElseProviderUsage(station, env);
   }
+}
+
+async function fetchStationsWithConcurrency(
+  stations: StationSeed[],
+  env: Env,
+  neptuneJuniorContext: NeptuneJuniorRunContext,
+  snapshotTime: number,
+  concurrency: number,
+): Promise<{ snapshots: StationSnapshot[]; stoppedBySubrequestLimit: boolean }> {
+  if (stations.length === 0) {
+    return { snapshots: [], stoppedBySubrequestLimit: false };
+  }
+
+  const snapshotByIndex: Array<StationSnapshot | null> = new Array(stations.length).fill(null);
+  let cursor = 0;
+  let stoppedBySubrequestLimit = false;
+
+  async function worker(): Promise<void> {
+    while (!stoppedBySubrequestLimit) {
+      const index = cursor;
+      cursor += 1;
+
+      if (index >= stations.length) {
+        return;
+      }
+
+      const station = stations[index];
+      try {
+        const usage = await fetchStationUsage(station, env, neptuneJuniorContext);
+        snapshotByIndex[index] = {
+          hashId: station.hashId,
+          snapshotTime,
+          free: usage.free,
+          used: usage.used,
+          total: usage.total,
+          error: usage.error,
+        };
+      } catch (error) {
+        if (isTooManySubrequestsError(error)) {
+          stoppedBySubrequestLimit = true;
+          console.warn("Subrequest limit reached; persisting partial successful snapshots only.");
+          return;
+        }
+        console.error(`Station fetch failed for ${station.provider}/${station.name}`, error);
+      }
+    }
+  }
+
+  const workerCount = Math.min(concurrency, stations.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+  return {
+    snapshots: snapshotByIndex.filter((item): item is StationSnapshot => item !== null),
+    stoppedBySubrequestLimit,
+  };
 }
 
 async function fetchNeptuneUsage(station: StationSeed) {
@@ -293,6 +338,10 @@ async function ensureNeptuneJuniorToken(env: Env, context: NeptuneJuniorRunConte
     return context.token;
   }
 
+  if (context.tokenPromise) {
+    return context.tokenPromise;
+  }
+
   if (context.attempted) {
     return null;
   }
@@ -307,18 +356,24 @@ async function ensureNeptuneJuniorToken(env: Env, context: NeptuneJuniorRunConte
     return null;
   }
 
-  const response = await fetchJson<{ data?: { token?: string } }>(
-    `https://gateway.hzxwwl.com/api/auth/wx/mp?openid=${encodeURIComponent(openid)}&unionid=${encodeURIComponent(unionid)}`,
-    { method: "GET" },
-  );
+  context.tokenPromise = (async () => {
+    const response = await fetchJson<{ data?: { token?: string } }>(
+      `https://gateway.hzxwwl.com/api/auth/wx/mp?openid=${encodeURIComponent(openid)}&unionid=${encodeURIComponent(unionid)}`,
+      { method: "GET" },
+    );
 
-  const token = response?.data?.token?.trim();
-  if (!token) {
-    console.warn("Failed to obtain Neptune Junior token.");
-    return null;
-  }
+    const token = response?.data?.token?.trim();
+    if (!token) {
+      console.warn("Failed to obtain Neptune Junior token.");
+      return null;
+    }
 
-  context.token = token;
+    context.token = token;
+    return token;
+  })();
+
+  const token = await context.tokenPromise;
+  context.tokenPromise = null;
   return token;
 }
 
@@ -349,6 +404,7 @@ async function fetchDlmmUsage(station: StationSeed, env: Env) {
     });
 
     if (!response || response.code !== 200) {
+      console.warn(`Dlmm device fetch failed for ${deviceId}`);
       continue;
     }
 
@@ -729,6 +785,14 @@ function rotateStationsForCycle(stations: StationSeed[], nowMs: number): Station
 
 function isHistoryEnabled(value: string | undefined): boolean {
   return value == null || value.toLowerCase() !== "false";
+}
+
+function resolveFetchConcurrency(rawValue: string | undefined): number {
+  const parsed = Number.parseInt(String(rawValue ?? ""), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_FETCH_CONCURRENCY;
+  }
+  return Math.min(parsed, MAX_FETCH_CONCURRENCY);
 }
 
 function safeNumber(value: unknown): number {

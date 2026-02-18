@@ -17,6 +17,7 @@ crons = ["*/2 * * * *"]
 
 [vars]
 HISTORY_ENABLED = "true"
+FETCH_CONCURRENCY = "4"
 
 [[d1_databases]]
 binding = "DB"
