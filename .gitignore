@@ -1,0 +1,51 @@
+# Python
+charger-craw/*
+__pycache__/
+
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 临时文件
+*.log
+logs/
+
+
+# OS
+.DS_Store
+Thumbs.db
+.env*
+.pytest_cache/
+.ruff_cache/*
+
+data/*
+reports/*
+.uv-cache/
+*.egg-info/
+.venv/*
+test.*
+.logfire/*
+
+# AI
+.spec-workflow/*
+AGENTS.md
+openspec/*
+
+# Node.js
+node_modules/
+package-lock.json
+.vitepress
+# Cloudflare Workers
+.wrangler/
+workers/**/.wrangler/

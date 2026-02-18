@@ -1,0 +1,33 @@
+CREATE TABLE IF NOT EXISTS stations (
+  hash_id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  name TEXT NOT NULL,
+  campus_id INTEGER,
+  campus_name TEXT,
+  lat REAL,
+  lon REAL,
+  device_ids_json TEXT NOT NULL DEFAULT "[]",
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS latest (
+  hash_id TEXT PRIMARY KEY,
+  snapshot_time INTEGER NOT NULL,
+  free INTEGER NOT NULL DEFAULT 0,
+  used INTEGER NOT NULL DEFAULT 0,
+  total INTEGER NOT NULL DEFAULT 0,
+  error INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY(hash_id) REFERENCES stations(hash_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  hash_id TEXT NOT NULL,
+  snapshot_time INTEGER NOT NULL,
+  free INTEGER NOT NULL DEFAULT 0,
+  used INTEGER NOT NULL DEFAULT 0,
+  total INTEGER NOT NULL DEFAULT 0,
+  error INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY(hash_id) REFERENCES stations(hash_id) ON DELETE CASCADE,
+  UNIQUE(hash_id, snapshot_time)
+);

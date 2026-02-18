@@ -1,0 +1,30 @@
+{
+  "name": "zju-charger",
+  "version": "2.0.0",
+  "description": "ZJU Charger Cloudflare Workers backend and docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev docs --base /",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs --base /",
+    "lint": "eslint \"workers/**/*.ts\"",
+    "lint:fix": "pnpm run lint -- --fix",
+    "prepare": "husky",
+    "api:dev": "pnpm --dir workers/api dev",
+    "api:deploy": "pnpm --dir workers/api deploy",
+    "api:typecheck": "pnpm --dir workers/api typecheck",
+    "fetcher:dev": "pnpm --dir workers/fetcher dev",
+    "fetcher:deploy": "pnpm --dir workers/fetcher deploy",
+    "fetcher:typecheck": "pnpm --dir workers/fetcher typecheck",
+    "workers:typecheck": "pnpm run api:typecheck && pnpm run fetcher:typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "husky": "^9.1.7",
+    "typescript-eslint": "^8.46.2",
+    "vitepress": "^1.0.0"
+  }
+}

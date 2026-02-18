@@ -1,0 +1,24 @@
+name = "zju-charger-fetcher"
+main = "src/index.ts"
+compatibility_date = "2026-02-17"
+workers_dev = false
+preview_urls = false
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[triggers]
+crons = ["*/2 * * * *"]
+
+[vars]
+HISTORY_ENABLED = "true"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "zju-charger"
+database_id = "b143e5f6-66e5-454b-81d6-89383841e321"
